@@ -19,10 +19,10 @@
  */
 MP1Node::MP1Node(Member *member, Params *params, EmulNet *emul, Log *log, Address *address)
 {
-    for (int i = 0; i < GROUPMAX + 1; i++)
-    {
-        failedNodes[i] = 0;
-    }
+    // for (int i = 0; i < GROUPMAX + 1; i++)
+    // {
+    //     failedNodes[i] = 0;
+    // }
     this->memberNode = member;
     this->emulNet = emul;
     this->log = log;
@@ -154,7 +154,7 @@ int MP1Node::introduceSelfToGroup(Address *joinaddr)
         memcpy((char *)(msg + 1) + 1 + sizeof(memberNode->addr.addr), &memberNode->heartbeat, sizeof(long));
 
 #ifdef DEBUGLOG
-        sprintf(s, "Sent a JOINREQ");
+        sprintf(s, "Attempting to Join");
         log->LOG(&memberNode->addr, s);
 #endif
 
@@ -299,6 +299,7 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
         sprintf(s, "Received message type: JOINREP, with Membership table of memory usage: %ld, from Address %s", sizeof(MemberListEntry) * vec.size(), sender.getAddress().c_str());
         log->LOG(&memberNode->addr, s);
 #endif
+
         vec = cleanupMembershipTable(vec);
         // vec.shrink_to_fit();
         for (MemberListEntry member : vec)
@@ -307,10 +308,52 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
         }
         memberNode->memberList = removeDuplicateMembers(memberNode->memberList);
         cout << "JOINREP Message Received\n";
-        // printMembershipTable(memberNode->addr,vec);
         printSelfMembershipTable();
 
         memberNode->inGroup = true;
+        sendJoinAcknowledgement(JOINACK, TTL);
+    }
+    else if (msgType == JOINACK)
+    {
+        // Dissect message into sender, heartbeat, ttl
+        // If sender is in membership table then just skip, send it to membership table with ttl-1
+        // If not and the size is smaller than the GROUPMAX then add it to the table with given heartbeat then send with lowered ttl
+        Address sender;
+        memcpy(&sender, (char *)(msg + 1), sizeof(sender));
+
+        // Extracting heartbeat
+        long receivedHeartbeat;
+        memcpy(&receivedHeartbeat, (char *)(msg + 1) + 1 + sizeof(sender), sizeof(receivedHeartbeat));
+
+        long ttl;
+        memcpy(&ttl, (char *)(msg + 1) + 1 + sizeof(sender) + sizeof(receivedHeartbeat), sizeof(ttl));
+
+#ifdef DEBUGLOG
+        sprintf(s, "Received message type: JOINACK, from address: %s, with heartbeat: %ld, TTL: %ld", sender.getAddress().c_str(), receivedHeartbeat, ttl);
+        log->LOG(&memberNode->addr, s);
+#endif
+
+        if(ttl == 0){
+            return true;
+        }
+        for (size_t i = 0; i < memberNode->memberList.size(); i++)
+        {
+            if (i == MEMBERLISTPOS)
+            {
+                continue;
+            }
+            string addr = to_string(memberNode->memberList[i].getid()) + ":" + to_string(memberNode->memberList[i].getport());
+            Address member(addr);
+            if (member == sender)
+            {
+                sendJoinAcknowledgement(JOINACK, ttl - 1);
+                return true;
+            }
+        }
+        if(memberNode->memberList.size() < GROUPMAX){
+            addMember(sender);
+            sendJoinAcknowledgement(JOINACK, ttl - 1);
+        }
     }
     else if (msgType == GOSSIP)
     {
@@ -326,15 +369,13 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
         vector<MemberListEntry> vec(vecSize);
         memcpy(vec.data(), (char *)(msg + 1) + sizeof(sender) + sizeof(vecSize), sizeof(MemberListEntry) * vecSize);
 
-#ifdef DEBUGLOG
-        sprintf(s, "Received message type: GOSSIP, with Membership table of memory usage: %ld, from Address %s", sizeof(MemberListEntry) * vec.size(), sender.getAddress().c_str());
-        log->LOG(&memberNode->addr, s);
-#endif
+        #ifdef DEBUGLOG
+                sprintf(s, "Received message type: GOSSIP, with Membership table of memory usage: %ld, from Address %s", sizeof(MemberListEntry) * vec.size(), sender.getAddress().c_str());
+                log->LOG(&memberNode->addr, s);
+        #endif
         vec = cleanupMembershipTable(vec);
         vec.shrink_to_fit();
-        // printMembershipTable(memberNode->addr,vec);
         compareAdjustMembershipTable(vec);
-        cout << "GOSSIP Message Received\n";
         printSelfMembershipTable();
     }
     else if (msgType == FAIL)
@@ -393,16 +434,16 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
  */
 void MP1Node::nodeLoopOps()
 {
-
+#ifdef DEBUGLOG
+    static char s[1024];
+#endif
     // Loop over own membership table and check if any of the heartbeats exceed the timeout, if so remove them from the table
     // Send gossip over network
-    // memberNode->memberList.shrink_to_fit();
-    // memberNode->memberList = cleanupMembershipTable(memberNode->memberList);
     cout << "UPDATE my heartbeat and time stamp: " << memberNode->addr.getAddress() << "\n";
     memberNode->memberList[MEMBERLISTPOS].setheartbeat(memberNode->memberList[MEMBERLISTPOS].getheartbeat() + 1);
     // memberNode->heartbeat = memberNode->memberList[MEMBERLISTPOS].getheartbeat();
     memberNode->memberList[MEMBERLISTPOS].settimestamp(par->getcurrtime());
-
+    
     // TODO check me's membership list of timed out individuals and if anybody did fail then send a FAIL
 
     // Loop over each element in the vector
@@ -419,7 +460,7 @@ void MP1Node::nodeLoopOps()
             // printSelfMembershipTable();
             // cout << "Nodeloopops of: "<<memberNode->addr.getAddress().c_str()<<"\n";
             // cout<<"Time difference: "<<me.gettimestamp() - memberNode->memberList[i].gettimestamp()<<"\n";
-            failedNodes[i] = 1;
+            // failedNodes[i] = 1;
             int id = memberNode->memberList[i].getid();
             short port = memberNode->memberList[i].getport();
             string addr = to_string(id) + ":" + to_string(port);
@@ -434,6 +475,10 @@ void MP1Node::nodeLoopOps()
                 if (memberNode->memberList[k].getid() == id && memberNode->memberList[k].getport() == port)
                 {
                     memberNode->memberList.erase(memberNode->memberList.begin() + i);
+#ifdef DEBUGLOG
+                    sprintf(s, "Node %s removed at time %d", failedAddr.getAddress().c_str(), par->getcurrtime());
+                    log->LOG(&memberNode->addr, s);
+#endif
                 }
                 string addr = to_string(memberNode->memberList[k].getid()) + ":" + to_string(memberNode->memberList[k].getport());
                 Address target(addr);
@@ -599,6 +644,46 @@ void MP1Node::sendMemberTable(MsgTypes type, vector<MemberListEntry> vec, Addres
 }
 
 /**
+ * FUNCTION NAME: sendJoinAcknowledgement
+ *
+ *  DESCRIPTION: Send to member's of the membership table that you have joined
+ */
+void MP1Node::sendJoinAcknowledgement(MsgTypes type, long ttl)
+{
+    short gossipSize = memberNode->memberList.size();
+    for (size_t i = 0; i < gossipSize; i++)
+    {
+        if (i == MEMBERLISTPOS)
+        {
+            continue;
+        }
+        string addr = to_string(memberNode->memberList[i].getid()) + ":" + to_string(memberNode->memberList[i].getport());
+        Address target(addr);
+
+        MessageHdr *msg;
+        size_t msgsize = sizeof(MessageHdr) + sizeof(&memberNode->addr.addr) + sizeof(long) + sizeof(long) + 1;
+        msg = (MessageHdr *)malloc(msgsize * sizeof(char));
+
+        // create JOINREQ message: format of data is {Address Heartbeat TTL}
+        msg->msgType = type;
+        memcpy((char *)(msg + 1), &memberNode->addr.addr, sizeof(memberNode->addr.addr));
+        memcpy((char *)(msg + 1) + 1 + sizeof(memberNode->addr.addr), &memberNode->heartbeat, sizeof(long));
+        memcpy((char *)(msg + 1) + 1 + sizeof(memberNode->addr.addr) + sizeof(memberNode->heartbeat), &ttl, sizeof(long));
+
+#ifdef DEBUGLOG
+        static char s[1024];
+        sprintf(s, "Sent my details, with message type: JOINACK to target: %s", target.getAddress().c_str());
+        log->LOG(&memberNode->addr, s);
+#endif
+        emulNet->ENsend(&memberNode->addr, &target, (char *)msg, msgsize);
+        free(msg);
+    }
+
+    //     emulNet->ENsend(&memberNode->addr, target, (char *)msg, msgsize);
+    //     free(msg);
+}
+
+/**
  * FUNCTION NAME: sendFailedAddress
  *
  *  DESCRIPTION: Send the address that failed
@@ -669,6 +754,9 @@ string MP1Node::Enum2Str(int num)
 
     case 3:
         return "FAIL";
+        break;
+    case 4:
+        return "JOINACK";
         break;
     default:
         return "Unknown request";

@@ -37,7 +37,8 @@ enum MsgTypes{
     JOINREQ,
     JOINREP,
     GOSSIP,
-	FAIL
+	FAIL,
+	JOINACK
 };
 
 /**
@@ -90,6 +91,7 @@ public:
     void compareAdjustMembershipTable(vector<MemberListEntry> vec);
     void printMembershipTable(Address addr, vector<MemberListEntry> vec);
     void printAddress(Address *addr);
+	void sendJoinAcknowledgement(MsgTypes type, long ttl);
 	
     virtual ~MP1Node();
 };
