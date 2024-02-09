@@ -1,7 +1,11 @@
 # Gossip Membership Implementation
 An implementation of the Gossip based membership protocol, made for the "<a href="https://www.coursera.org/learn/cloud-computing?specialization=cloud-computing">Cloud Computation Part 1</a>" course from coursera. 
 
-Note for anyone trying to cheat on the assignement, this code isn't complete with the steps necessary to pass the grader, they have been omitted on purpose, however it will get you pretty close to what you want to do.
+Note for anyone trying to cheat on the assignement, this code isn't complete with the steps necessary to pass the grader, they have been omitted on purpose, however it will get you pretty close to what you want to do. With proof: 
+<p align="center">
+<img src="https://github.com/ImmortalBoi/Gossip-membership/assets/54212167/f0814a61-c956-4c69-9a99-f9951b3794b8"> 
+</p>
+
 
 # Usage
 
