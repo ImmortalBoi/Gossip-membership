@@ -7,6 +7,7 @@
 
 #include "MP1Node.h"
 #include "Member.h"
+#include <sstream>
 
 /*
  * Note: You can change/add any functions in MP1Node.{h,cpp}
@@ -262,10 +263,10 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
         long receivedHeartbeat;
         memcpy(&receivedHeartbeat, (char *)(msg + 1) + 1 + sizeof(sender), sizeof(receivedHeartbeat));
 
-#ifdef DEBUGLOG
-        sprintf(s, "Received message type: JOINREQ, from address: %s, with heartbeat: %ld", sender.getAddress().c_str(), receivedHeartbeat);
-        log->LOG(&memberNode->addr, s);
-#endif
+        // #ifdef DEBUGLOG
+        //         sprintf(s, "Received message type: JOINREQ, from address: %s, with heartbeat: %ld", sender.getAddress().c_str(), receivedHeartbeat);
+        //         log->LOG(&memberNode->addr, s);
+        // #endif
 
         addMember(sender);
         if (memberNode->memberList.size() < GROUPMAX)
@@ -295,10 +296,10 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
 
         vector<MemberListEntry> vec(vecSize);
         memcpy(vec.data(), (char *)(msg + 1) + sizeof(sender) + sizeof(vecSize), sizeof(MemberListEntry) * vecSize);
-#ifdef DEBUGLOG
-        sprintf(s, "Received message type: JOINREP, with Membership table of memory usage: %ld, from Address %s", sizeof(MemberListEntry) * vec.size(), sender.getAddress().c_str());
-        log->LOG(&memberNode->addr, s);
-#endif
+        // #ifdef DEBUGLOG
+        //         sprintf(s, "Received message type: JOINREP, with Membership table of memory usage: %ld, from Address %s", sizeof(MemberListEntry) * vec.size(), sender.getAddress().c_str());
+        //         log->LOG(&memberNode->addr, s);
+        // #endif
 
         vec = cleanupMembershipTable(vec);
         // vec.shrink_to_fit();
@@ -308,16 +309,23 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
         }
         memberNode->memberList = removeDuplicateMembers(memberNode->memberList);
         cout << "JOINREP Message Received\n";
+        // printMembershipTable(memberNode->addr,vec);
         printSelfMembershipTable();
 
         memberNode->inGroup = true;
-        sendJoinAcknowledgement(JOINACK, TTL);
+        sendJoinAcknowledgement(JOINACK, TTLAWK);
+
+        // #ifdef DEBUGLOG
+        //         sprintf(s, "Node %s joined at time %d", memberNode->addr.getAddress().c_str(), par->getcurrtime());
+        //         log->LOG(&memberNode->addr, s);
+        // #endif
     }
     else if (msgType == JOINACK)
     {
         // Dissect message into sender, heartbeat, ttl
         // If sender is in membership table then just skip, send it to membership table with ttl-1
         // If not and the size is smaller than the GROUPMAX then add it to the table with given heartbeat then send with lowered ttl
+        // Extracting address
         Address sender;
         memcpy(&sender, (char *)(msg + 1), sizeof(sender));
 
@@ -328,14 +336,20 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
         long ttl;
         memcpy(&ttl, (char *)(msg + 1) + 1 + sizeof(sender) + sizeof(receivedHeartbeat), sizeof(ttl));
 
+        // #ifdef DEBUGLOG
+        //         sprintf(s, "Received message type: JOINACK, from address: %s, with heartbeat: %ld, TTL: %ld", sender.getAddress().c_str(), receivedHeartbeat, ttl);
+        //         log->LOG(&memberNode->addr, s);
+        // #endif
+
 #ifdef DEBUGLOG
-        sprintf(s, "Received message type: JOINACK, from address: %s, with heartbeat: %ld, TTL: %ld", sender.getAddress().c_str(), receivedHeartbeat, ttl);
+        sprintf(s, "Node %s joined at time %d", printAddress(sender).c_str(), par->getcurrtime());
         log->LOG(&memberNode->addr, s);
 #endif
-
-        if(ttl == 0){
+        if (ttl == 0)
+        {
             return true;
         }
+
         for (size_t i = 0; i < memberNode->memberList.size(); i++)
         {
             if (i == MEMBERLISTPOS)
@@ -350,7 +364,8 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
                 return true;
             }
         }
-        if(memberNode->memberList.size() < GROUPMAX){
+        if (memberNode->memberList.size() < GROUPMAX)
+        {
             addMember(sender);
             sendJoinAcknowledgement(JOINACK, ttl - 1);
         }
@@ -369,13 +384,15 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
         vector<MemberListEntry> vec(vecSize);
         memcpy(vec.data(), (char *)(msg + 1) + sizeof(sender) + sizeof(vecSize), sizeof(MemberListEntry) * vecSize);
 
-        #ifdef DEBUGLOG
-                sprintf(s, "Received message type: GOSSIP, with Membership table of memory usage: %ld, from Address %s", sizeof(MemberListEntry) * vec.size(), sender.getAddress().c_str());
-                log->LOG(&memberNode->addr, s);
-        #endif
+        // #ifdef DEBUGLOG
+        //         sprintf(s, "Received message type: GOSSIP, with Membership table of memory usage: %ld, from Address %s", sizeof(MemberListEntry) * vec.size(), sender.getAddress().c_str());
+        //         log->LOG(&memberNode->addr, s);
+        // #endif
         vec = cleanupMembershipTable(vec);
         vec.shrink_to_fit();
+        // printMembershipTable(memberNode->addr,vec);
         compareAdjustMembershipTable(vec);
+        cout << "GOSSIP Message Received\n";
         printSelfMembershipTable();
     }
     else if (msgType == FAIL)
@@ -397,15 +414,21 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
         memcpy(&failedAddr.addr[0], &id, sizeof(int));
         memcpy(&failedAddr.addr[4], &port, sizeof(short));
 
-#ifdef DEBUGLOG
-        sprintf(s, "Received message type: FAIL, informing that Address: %s has failed, from Address %s with ttl: %ld", failedAddr.getAddress().c_str(), sender.getAddress().c_str(), ttl);
-        log->LOG(&memberNode->addr, s);
-#endif
+        // #ifdef DEBUGLOG
+        //         sprintf(s, "Received message type: FAIL, informing that Address: %s has failed, from Address %s with ttl: %ld", failedAddr.getAddress().c_str(), sender.getAddress().c_str(), ttl);
+        //         log->LOG(&memberNode->addr, s);
+        // #endif
+
         if (ttl == 0)
         {
             return true;
         }
+        // #ifdef DEBUGLOG
+        //         // sprintf(s, "Node %s removed at time %d", failedAddr.getAddress().c_str(), par->getcurrtime());
+        //         sprintf(s, "Node %s has failed ", printAddress(failedAddr).c_str());
 
+        //         log->LOG(&memberNode->addr, s);
+        // #endif
         for (size_t i = 0; i < memberNode->memberList.size(); i++)
         {
             if (i == MEMBERLISTPOS)
@@ -414,7 +437,12 @@ bool MP1Node::recvCallBack(void *env, char *data, int size)
             }
             if (memberNode->memberList[i].getid() == id && memberNode->memberList[i].getport() == port)
             {
-                memberNode->memberList.erase(memberNode->memberList.begin() + i);
+                // memberNode->memberList.erase(memberNode->memberList.begin() + i);
+                failedNodes[i] = 1;
+// #ifdef DEBUGLOG
+//                 sprintf(s, "Node %s removed Node %s", printAddress(memberNode->addr).c_str(), printAddress(failedAddr).c_str());
+//                 log->LOG(&memberNode->addr, s);
+// #endif
             }
             string addr = to_string(memberNode->memberList[i].getid()) + ":" + to_string(memberNode->memberList[i].getport());
             Address target(addr);
@@ -439,11 +467,13 @@ void MP1Node::nodeLoopOps()
 #endif
     // Loop over own membership table and check if any of the heartbeats exceed the timeout, if so remove them from the table
     // Send gossip over network
+    // memberNode->memberList.shrink_to_fit();
+    // memberNode->memberList = cleanupMembershipTable(memberNode->memberList);
     cout << "UPDATE my heartbeat and time stamp: " << memberNode->addr.getAddress() << "\n";
     memberNode->memberList[MEMBERLISTPOS].setheartbeat(memberNode->memberList[MEMBERLISTPOS].getheartbeat() + 1);
     // memberNode->heartbeat = memberNode->memberList[MEMBERLISTPOS].getheartbeat();
     memberNode->memberList[MEMBERLISTPOS].settimestamp(par->getcurrtime());
-    
+
     // TODO check me's membership list of timed out individuals and if anybody did fail then send a FAIL
 
     // Loop over each element in the vector
@@ -460,7 +490,7 @@ void MP1Node::nodeLoopOps()
             // printSelfMembershipTable();
             // cout << "Nodeloopops of: "<<memberNode->addr.getAddress().c_str()<<"\n";
             // cout<<"Time difference: "<<me.gettimestamp() - memberNode->memberList[i].gettimestamp()<<"\n";
-            // failedNodes[i] = 1;
+            failedNodes[i] = 1;
             int id = memberNode->memberList[i].getid();
             short port = memberNode->memberList[i].getport();
             string addr = to_string(id) + ":" + to_string(port);
@@ -472,14 +502,10 @@ void MP1Node::nodeLoopOps()
                     continue;
                 }
 
-                if (memberNode->memberList[k].getid() == id && memberNode->memberList[k].getport() == port)
-                {
-                    memberNode->memberList.erase(memberNode->memberList.begin() + i);
-#ifdef DEBUGLOG
-                    sprintf(s, "Node %s removed at time %d", failedAddr.getAddress().c_str(), par->getcurrtime());
-                    log->LOG(&memberNode->addr, s);
-#endif
-                }
+                // if (memberNode->memberList[k].getid() == id && memberNode->memberList[k].getport() == port)
+                // {
+                //     memberNode->memberList.erase(memberNode->memberList.begin() + i);
+                // }
                 string addr = to_string(memberNode->memberList[k].getid()) + ":" + to_string(memberNode->memberList[k].getport());
                 Address target(addr);
                 sendFailedAddress(FAIL, &failedAddr, &target, &memberNode->addr, TTL);
@@ -489,21 +515,25 @@ void MP1Node::nodeLoopOps()
             // memberNode->memberList.erase(memberNode->memberList.begin() + i);
         }
     }
-    int TcleanUp = std::log10(MAX_NODES);
+    // int TcleanUp = std::log10(MAX_NODES);
     // Check the Failed nodes to delete, get no. of nodes in the list, get log(n) of it, then set that as the time for failed nodes
-    for (size_t i = 0; i < GROUPMAX; i++)
+    for (size_t i = 0,j = 0; j < memberNode->memberList.size(); i++,j++)
     {
         if (failedNodes[i] == 0)
         {
             continue;
         }
-        else
+        else if (memberNode->memberList[MEMBERLISTPOS].gettimestamp() - memberNode->memberList[i].gettimestamp() >= TCLEANUP)
         {
-            if (memberNode->memberList[MEMBERLISTPOS].gettimestamp() - memberNode->memberList[i].gettimestamp() >= TcleanUp)
-            {
-                memberNode->memberList.erase(memberNode->memberList.begin() + i);
-                failedNodes[i] = 0;
-            }
+            failedNodes[i] = 0;
+#ifdef DEBUGLOG
+            string addr = to_string(memberNode->memberList[j].getid()) + ":" + to_string(memberNode->memberList[j].getport());
+            Address failedAddr(addr);
+            sprintf(s, "Node %s removed Node %s", printAddress(memberNode->addr).c_str(), printAddress(failedAddr).c_str());
+            log->LOG(&memberNode->addr, s);
+#endif
+            memberNode->memberList.erase(memberNode->memberList.begin() + j);
+            j--;
         }
     }
     // TODO Send gossip with my new info in it
@@ -555,10 +585,15 @@ void MP1Node::initMemberListTable(Member *memberNode)
  *
  * DESCRIPTION: Print the Address
  */
-void MP1Node::printAddress(Address *addr)
+string MP1Node::printAddress(Address addr)
 {
-    printf("%d.%d.%d.%d:%d \n", addr->addr[0], addr->addr[1], addr->addr[2],
-           addr->addr[3], *(short *)&addr->addr[4]);
+    std::stringstream ss;
+    ss << static_cast<int>(addr.addr[0]) << "."
+       << static_cast<int>(addr.addr[1]) << "."
+       << static_cast<int>(addr.addr[2]) << "."
+       << static_cast<int>(addr.addr[3]) << ":"
+       << *reinterpret_cast<short *>(&addr.addr[4]);
+    return ss.str();
 }
 
 /**
@@ -633,11 +668,11 @@ void MP1Node::sendMemberTable(MsgTypes type, vector<MemberListEntry> vec, Addres
     memcpy((char *)(msg + 1) + sizeof(sender), &vecSize, sizeof(vecSize));
     memcpy((char *)(msg + 1) + sizeof(sender) + sizeof(vecSize), vec.data(), sizeof(MemberListEntry) * vecSize);
 
-#ifdef DEBUGLOG
-    static char s[1024];
-    sprintf(s, "Sent membership table of memory size:%ld, with message type: %s to target: %s", sizeof(MemberListEntry) * vecSize, Enum2Str(msg->msgType).c_str(), target->getAddress().c_str());
-    log->LOG(&memberNode->addr, s);
-#endif
+    // #ifdef DEBUGLOG
+    //     static char s[1024];
+    //     sprintf(s, "Sent membership table of memory size:%ld, with message type: %s to target: %s", sizeof(MemberListEntry) * vecSize, Enum2Str(msg->msgType).c_str(), target->getAddress().c_str());
+    //     log->LOG(&memberNode->addr, s);
+    // #endif
 
     emulNet->ENsend(&memberNode->addr, target, (char *)msg, msgsize);
     free(msg);
@@ -670,11 +705,11 @@ void MP1Node::sendJoinAcknowledgement(MsgTypes type, long ttl)
         memcpy((char *)(msg + 1) + 1 + sizeof(memberNode->addr.addr), &memberNode->heartbeat, sizeof(long));
         memcpy((char *)(msg + 1) + 1 + sizeof(memberNode->addr.addr) + sizeof(memberNode->heartbeat), &ttl, sizeof(long));
 
-#ifdef DEBUGLOG
-        static char s[1024];
-        sprintf(s, "Sent my details, with message type: JOINACK to target: %s", target.getAddress().c_str());
-        log->LOG(&memberNode->addr, s);
-#endif
+        // #ifdef DEBUGLOG
+        //         static char s[1024];
+        //         sprintf(s, "Sent my details, with message type: JOINACK to target: %s", target.getAddress().c_str());
+        //         log->LOG(&memberNode->addr, s);
+        // #endif
         emulNet->ENsend(&memberNode->addr, &target, (char *)msg, msgsize);
         free(msg);
     }
@@ -701,11 +736,11 @@ void MP1Node::sendFailedAddress(MsgTypes type, Address *failedAddr, Address *tar
     memcpy((char *)(msg + 1) + sizeof(sender), failedAddr, sizeof(failedAddr));
     memcpy((char *)(msg + 1) + sizeof(sender) + sizeof(failedAddr) + 1, &ttl, sizeof(ttl));
 
-#ifdef DEBUGLOG
-    static char s[1024];
-    sprintf(s, "Sent message type: %s to target: %s", Enum2Str(msg->msgType).c_str(), target->getAddress().c_str());
-    log->LOG(&memberNode->addr, s);
-#endif
+    // #ifdef DEBUGLOG
+    //     static char s[1024];
+    //     sprintf(s, "Sent message type: %s to target: %s", Enum2Str(msg->msgType).c_str(), target->getAddress().c_str());
+    //     log->LOG(&memberNode->addr, s);
+    // #endif
 
     emulNet->ENsend(&memberNode->addr, target, (char *)msg, msgsize);
     free(msg);
@@ -841,7 +876,7 @@ void MP1Node::compareAdjustMembershipTable(vector<MemberListEntry> vec)
         int port = memberNode->memberList[i].getport();
         for (size_t j = 0; j < vec.size(); j++)
         {
-            if (vec[j].gettimestamp() > par->getcurrtime() || vec[j].gettimestamp() < 0 || vec[j].getid() <= 0 || vec[j].getheartbeat() < 0)
+            if (par->getcurrtime() - vec[j].gettimestamp() > 2 || vec[j].gettimestamp() < 0 || vec[j].getid() <= 0 || vec[j].getheartbeat() < 0 )
             {
                 // cout<<"About to erase\n";
                 vec.erase(vec.begin() + j);

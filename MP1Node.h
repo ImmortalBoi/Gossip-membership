@@ -21,10 +21,11 @@
 #define TREMOVE 20
 #define TFAIL 5
 #define MEMBERLISTPOS 0
-#define GROUPMAX 5
-#define TIMEOUT 5
-#define TCLEANUP 5
-#define TTL 2
+#define GROUPMAX 10
+#define TIMEOUT 10
+#define TCLEANUP 2
+#define TTLAWK 2
+#define TTL 5
 
 /*
  * Note: You can change/add any functions in MP1Node.{h,cpp}
@@ -90,7 +91,7 @@ public:
     vector<MemberListEntry> cleanupMembershipTable(vector<MemberListEntry> vec);
     void compareAdjustMembershipTable(vector<MemberListEntry> vec);
     void printMembershipTable(Address addr, vector<MemberListEntry> vec);
-    void printAddress(Address *addr);
+    string printAddress(Address addr);
 	void sendJoinAcknowledgement(MsgTypes type, long ttl);
 	
     virtual ~MP1Node();
